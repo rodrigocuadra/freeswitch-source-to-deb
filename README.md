@@ -1,5 +1,3 @@
-# 📦 Step-by-Step Guide: Compiling FreeSWITCH on Debian 13 (with .deb packages)
-
 This document summarizes the corrected workflow we followed to build FreeSWITCH on Debian 13 (trixie/sid) and generate .deb packages, taking into account the issues encountered (missing dependencies, spandsp, sofia-sip, etc.).
 
 > [!IMPORTANT]
@@ -80,101 +78,131 @@ apt-get install -f -y
 
 ### 2.2 libks2
 
+**Step 1: Clone the Repository and Prepare the Directory**
+
 ```bash
 cd /usr/src
 git clone https://github.com/signalwire/libks.git
 cd libks
+mkdir -p debian
+```
 
-mkdir debian
-cd debian
-touch control rules changelog copyright
-cd /usr/src/libks
+**Step 2: Create Debian Packaging Files**
 
-tr -d '\r' <<'EOF' > debian/control
-Source: libks
-Section: libs
-Priority: optional
-Maintainer: Rodrigo Cuadra <rcuadra@aplitel.com>
-Build-Depends: debhelper-compat (= 13), cmake, libpcre2-dev, uuid-dev
-Standards-Version: 4.6.2
-Homepage: https://github.com/signalwire/libks
+Create the following files inside the `debian/` directory:
 
-Package: libks2
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: SignalWire libks library
- A library for communication protocols developed by SignalWire.
+*   `debian/control`:
+    ```bash
+    cat <<'EOF' > debian/control
+    Source: libks
+    Section: libs
+    Priority: optional
+    Maintainer: Rodrigo Cuadra <rcuadra@aplitel.com>
+    Build-Depends: debhelper-compat (= 13), cmake, libpcre2-dev, uuid-dev
+    Standards-Version: 4.6.2
+    Homepage: https://github.com/signalwire/libks
 
-Package: libks2-dev
-Architecture: any
-Depends: libks2 (= ${binary:Version}), ${misc:Depends}
-Description: Development files for libks
- Development headers and libraries for libks.
-EOF
+    Package: libks2
+    Architecture: any
+    Depends: ${shlibs:Depends}, ${misc:Depends}
+    Description: SignalWire libks library
+     A library for communication protocols developed by SignalWire.
 
-tr -d '\r' <<'EOF' > debian/rules
-#!/usr/bin/make -f
-%:
-	dh $@
+    Package: libks2-dev
+    Architecture: any
+    Depends: libks2 (= ${binary:Version}), ${misc:Depends}
+    Description: Development files for libks
+     Development headers and libraries for libks.
+    EOF
+    ```
 
-override_dh_auto_configure:
-	cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release .
+*   `debian/rules` (make sure to set it executable):
+    ```bash
+    cat <<'EOF' > debian/rules
+    #!/usr/bin/make -f
+    %:
+    	dh $@
 
-override_dh_auto_install:
-	dh_auto_install --destdir=debian/tmp
+    override_dh_auto_configure:
+    	cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release .
 
-override_dh_auto_clean:
-	dh_clean
+    override_dh_auto_install:
+    	dh_auto_install --destdir=debian/tmp
 
-override_dh_installdocs:
-	dh_installdocs
-	dh_installdocs -plibks2-dev --link-doc=libks2
-EOF
-chmod +x debian/rules
+    override_dh_auto_clean:
+    	dh_clean
 
-tr -d '\r' <<'EOF' > debian/changelog
-libks (2.0-7) unstable; urgency=medium
+    override_dh_installdocs:
+    	dh_installdocs
+    	dh_installdocs -plibks2-dev --link-doc=libks2
+    EOF
+    chmod +x debian/rules
+    ```
 
-  * Initial packaging with proper multiarch support.
+*   `debian/changelog`:
+    ```bash
+    cat <<'EOF' > debian/changelog
+    libks (2.0-7) unstable; urgency=medium
 
- -- Rodrigo Cuadra <rcuadra@aplitel.com>  Mon, 08 Sep 2025 20:30:00 +0000
-EOF
+      * Initial packaging with proper multiarch support.
 
-tr -d '\r' <<'EOF' > debian/copyright
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Files: *
-Copyright: 2025 SignalWire, Inc.
-License: MPL-1.1 or GPL-2+
+     -- Rodrigo Cuadra <rcuadra@aplitel.com>  Mon, 08 Sep 2025 20:30:00 +0000
+    EOF
+    ```
 
-License: MPL-1.1 or GPL-2+
- This program is dual licensed under MPL 1.1 or GPL 2.0.
- On Debian systems, the complete text of the GNU General Public License
- version 2 can be found in /usr/share/common-licenses/GPL-2.
-EOF
+*   `debian/copyright`:
+    ```bash
+    cat <<'EOF' > debian/copyright
+    Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+    Files: *
+    Copyright: 2025 SignalWire, Inc.
+    License: MPL-1.1 or GPL-2+
 
-tr -d '\r' <<'EOF' > debian/not-installed
-usr/share/doc/libks2/changelog.Debian.gz
-usr/share/doc/libks2/copyright
-EOF
+    License: MPL-1.1 or GPL-2+
+     This program is dual licensed under MPL 1.1 or GPL 2.0.
+     On Debian systems, the complete text of the GNU General Public License
+     version 2 can be found in /usr/share/common-licenses/GPL-2.
+    EOF
+    ```
 
-tr -d '\r' <<'EOF' > debian/libks2.install
-usr/lib/libks2.so*
-EOF
+*   `debian/not-installed`:
+    ```bash
+    cat <<'EOF' > debian/not-installed
+    usr/share/doc/libks2/changelog.Debian.gz
+    usr/share/doc/libks2/copyright
+    EOF
+    ```
 
-tr -d '\r' <<'EOF' > debian/libks2-dev.install
-usr/include/libks2/*
-usr/lib/pkgconfig/libks2.pc
-EOF
+*   `debian/libks2.install`:
+    ```bash
+    cat <<'EOF' > debian/libks2.install
+    usr/lib/libks2.so*
+    EOF
+    ```
 
+*   `debian/libks2-dev.install`:
+    ```bash
+    cat <<'EOF' > debian/libks2-dev.install
+    usr/include/libks2/*
+    usr/lib/pkgconfig/libks2.pc
+    EOF
+    ```
+
+**Step 3: Compile and Install the Debian Package**
+
+```bash
+# Clean potential build residuals
 rm -rf obj-x86_64-linux-gnu CMakeCache.txt CMakeFiles
 fakeroot debian/rules clean
+
+# Compile packages (-us -uc disables GPG signing)
 dpkg-buildpackage -us -uc -b
 
-# Move packages to /usr/src/freeswitch/deb
+# Move generated packages to the FreeSWITCH deb cache
 mkdir -p /usr/src/freeswitch/deb
 mv /usr/src/libks2*.deb /usr/src/freeswitch/deb/
 
-# Install the newly created package so that it is available as a dependency for FreeSWITCH
+# Install the packages so they can be resolved as build dependencies
 cd /usr/src/freeswitch/deb
 dpkg -i libks2_*.deb libks2-dev_*.deb
 apt-get install -f -y
@@ -227,107 +255,137 @@ apt-get install -f -y
 
 ### 2.5 signalwire-c
 
+**Step 1: Clone the Repository and Prepare the Directory**
+
 ```bash
 cd /usr/src
 git clone https://github.com/signalwire/signalwire-c.git
 cd signalwire-c
+mkdir -p debian
+```
 
-mkdir debian
-cd debian
-touch control rules changelog copyright
+**Step 2: Create Debian Packaging Files**
 
-cd /usr/src/signalwire-c
-tr -d '\r' <<'EOF' > debian/control
-Source: signalwire-c
-Section: libs
-Priority: optional
-Maintainer: Rodrigo Cuadra <rcuadra@aplitel.com>
-Build-Depends: debhelper-compat (= 13), cmake, libks2-dev, uuid-dev, libpcre2-dev, libssl-dev, libjansson-dev
-Standards-Version: 4.6.2
-Homepage: https://github.com/signalwire/signalwire-c
+Create the following files inside the `debian/` directory:
 
-Package: signalwire-client-c2
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libks2
-Description: SignalWire C client library (version 2)
- A C library for SignalWire communication protocols.
+*   `debian/control`:
+    ```bash
+    cat <<'EOF' > debian/control
+    Source: signalwire-c
+    Section: libs
+    Priority: optional
+    Maintainer: Rodrigo Cuadra <rcuadra@aplitel.com>
+    Build-Depends: debhelper-compat (= 13), cmake, libpcre2-dev, uuid-dev, libpcre2-dev, libssl-dev, libjansson-dev
+    Standards-Version: 4.6.2
+    Homepage: https://github.com/signalwire/signalwire-c
 
-Package: signalwire-client-c2-dev
-Architecture: any
-Depends: signalwire-client-c2 (= ${binary:Version}), ${misc:Depends}, libks2-dev
-Description: Development files for SignalWire C client library (version 2)
- Development headers and libraries for signalwire-client-c2.
-EOF
+    Package: signalwire-client-c2
+    Architecture: any
+    Depends: ${shlibs:Depends}, ${misc:Depends}, libks2
+    Description: SignalWire C client library (version 2)
+     A C library for SignalWire communication protocols.
 
-tr -d '\r' <<'EOF' > debian/rules
-#!/usr/bin/make -f
-%:
-	dh $@
+    Package: signalwire-client-c2-dev
+    Architecture: any
+    Depends: signalwire-client-c2 (= ${binary:Version}), ${misc:Depends}, libks2-dev
+    Description: Development files for SignalWire C client library (version 2)
+     Development headers and libraries for signalwire-client-c2.
+    EOF
+    ```
 
-override_dh_auto_configure:
-	cmake -DCMAKE_INSTALL_PREFIX=/usr \
-	      -DCMAKE_BUILD_TYPE=Release \
-	      -DBUILD_SHARED_LIBS=ON \
-	      -DINSTALL_PKGCONFIG_DIR=/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig .
+*   `debian/rules` (make sure to set it executable):
+    ```bash
+    cat <<'EOF' > debian/rules
+    #!/usr/bin/make -f
+    %:
+    	dh $@
 
-override_dh_auto_install:
-	dh_auto_install --destdir=debian/tmp
+    override_dh_auto_configure:
+    	cmake -DCMAKE_INSTALL_PREFIX=/usr \
+    	      -DCMAKE_BUILD_TYPE=Release \
+    	      -DBUILD_SHARED_LIBS=ON \
+    	      -DINSTALL_PKGCONFIG_DIR=/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig .
 
-override_dh_auto_test:
-	: # Skip tests temporarily
+    override_dh_auto_install:
+    	dh_auto_install --destdir=debian/tmp
 
-override_dh_auto_clean:
-	dh_clean
+    override_dh_auto_test:
+    	: # Skip tests temporarily
 
-override_dh_installdocs:
-	dh_installdocs
-	dh_installdocs -psignalwire-client-c2-dev --link-doc=signalwire-client-c2
-EOF
-chmod +x debian/rules
+    override_dh_auto_clean:
+    	dh_clean
 
-tr -d '\r' <<'EOF' > debian/not-installed
-usr/share/doc/signalwire-client-c2/changelog.Debian.gz
-usr/share/doc/signalwire-client-c2/copyright
-EOF
+    override_dh_installdocs:
+    	dh_installdocs
+    	dh_installdocs -psignalwire-client-c2-dev --link-doc=signalwire-client-c2
+    EOF
+    chmod +x debian/rules
+    ```
 
-tr -d '\r' <<'EOF' > debian/signalwire-client-c2.install
-usr/lib/libsignalwire_client2.so*
-EOF
+*   `debian/changelog`:
+    ```bash
+    cat <<'EOF' > debian/changelog
+    signalwire-c (1.0-13) unstable; urgency=medium
 
-tr -d '\r' <<'EOF' > debian/signalwire-client-c2-dev.install
-usr/include/signalwire-client-c2/*
-usr/lib/pkgconfig/signalwire_client2.pc
-EOF
+      * Initial packaging for SignalWire C library.
 
-tr -d '\r' <<'EOF' > debian/changelog
-signalwire-c (1.0-13) unstable; urgency=medium
+     -- Rodrigo Cuadra <rcuadra@aplitel.com>  Mon, 08 Sep 2025 22:00:00 +0000
+    EOF
+    ```
 
-  * Initial packaging for SignalWire C library.
+*   `debian/copyright`:
+    ```bash
+    cat <<'EOF' > debian/copyright
+    Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+    Files: *
+    Copyright: 2025 SignalWire, Inc.
+    License: MPL-1.1 or GPL-2+
 
- -- Rodrigo Cuadra <rcuadra@aplitel.com>  Mon, 08 Sep 2025 22:00:00 +0000
-EOF
+    License: MPL-1.1 or GPL-2+
+     This program is dual licensed under MPL 1.1 or GPL 2.0.
+     On Debian systems, the complete text of the GNU General Public License
+     version 2 can be found in /usr/share/common-licenses/GPL-2.
+    EOF
+    ```
 
-tr -d '\r' <<'EOF' > debian/copyright
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Files: *
-Copyright: 2025 SignalWire, Inc.
-License: MPL-1.1 or GPL-2+
+*   `debian/not-installed`:
+    ```bash
+    cat <<'EOF' > debian/not-installed
+    usr/share/doc/signalwire-client-c2/changelog.Debian.gz
+    usr/share/doc/signalwire-client-c2/copyright
+    EOF
+    ```
 
-License: MPL-1.1 or GPL-2+
- This program is dual licensed under MPL 1.1 or GPL 2.0.
- On Debian systems, the complete text of the GNU General Public License
- version 2 can be found in /usr/share/common-licenses/GPL-2.
-EOF
+*   `debian/signalwire-client-c2.install`:
+    ```bash
+    cat <<'EOF' > debian/signalwire-client-c2.install
+    usr/lib/libsignalwire_client2.so*
+    EOF
+    ```
 
+*   `debian/signalwire-client-c2-dev.install`:
+    ```bash
+    cat <<'EOF' > debian/signalwire-client-c2-dev.install
+    usr/include/signalwire-client-c2/*
+    usr/lib/pkgconfig/signalwire_client2.pc
+    EOF
+    ```
+
+**Step 3: Compile and Install the Debian Package**
+
+```bash
+# Clean potential build residuals
 rm -rf obj-x86_64-linux-gnu CMakeCache.txt CMakeFiles
 fakeroot debian/rules clean
+
+# Compile packages (-us -uc disables GPG signing)
 dpkg-buildpackage -us -uc -b
 
-# Move packages to /usr/src/freeswitch/deb
+# Move generated packages to the FreeSWITCH deb cache
 mkdir -p /usr/src/freeswitch/deb
 mv /usr/src/signalwire-client-c2*.deb /usr/src/freeswitch/deb/
 
-# Install the newly created package so that it is available as a dependency for FreeSWITCH
+# Install the packages so they can be resolved as build dependencies
 cd /usr/src/freeswitch/deb
 dpkg -i signalwire-client-c2_*.deb signalwire-client-c2-dev_*.deb
 apt-get install -f -y
