@@ -10,9 +10,11 @@ This document summarizes the corrected workflow we followed to build FreeSWITCH 
 
 ---
 
-## 1. Prepare the environment
+## 🛠️ Phase 1: Environment & Base Prerequisites
 
-Install build tools:
+### 1.1 Prepare the Environment and Install Build Tools
+
+Install the general build tools and packaging utilities required for building Debian packages:
 
 ```bash
 apt-get update
@@ -27,7 +29,9 @@ apt-get install -y \
 
 ---
 
-## 2. Install FreeSWITCH base dependencies
+### 1.2 Install FreeSWITCH Base Dependencies
+
+Install the core system libraries:
 
 ```bash
 apt-get install -y \
@@ -48,9 +52,11 @@ apt-get install -y \
 
 ---
 
-## 3. Create and install .deb packages for dependencies (compiled)
+## 📦 Phase 2: Compile Custom Telephony Libraries (Dependencies)
 
-### spandsp 3.x
+Some critical dependencies for FreeSWITCH are no longer available in the Debian 13 repository or require custom configurations. We compile them from source and build their corresponding `.deb` packages.
+
+### 2.1 spandsp 3.x
 
 ```bash
 cd /usr/src
@@ -72,7 +78,7 @@ dpkg -i libspandsp3_*.deb libspandsp3-dev_*.deb
 apt-get install -f -y
 ```
 
-### libks2
+### 2.2 libks2
 
 ```bash
 cd /usr/src
@@ -174,7 +180,7 @@ dpkg -i libks2_*.deb libks2-dev_*.deb
 apt-get install -f -y
 ```
 
-### sofia-sip
+### 2.3 sofia-sip
 
 ```bash
 cd /usr/src
@@ -197,7 +203,7 @@ dpkg -i libsofia-sip-ua0_*.deb libsofia-sip-ua-dev_*.deb sofia-sip-bin_*.deb
 apt-get install -f -y
 ```
 
-### libbroadvoice
+### 2.4 libbroadvoice
 
 ```bash
 cd /usr/src
@@ -219,7 +225,7 @@ dpkg -i libbroadvoice1_*.deb libbroadvoice-dev_*.deb
 apt-get install -f -y
 ```
 
-### signalwire-c
+### 2.5 signalwire-c
 
 ```bash
 cd /usr/src
@@ -329,7 +335,10 @@ apt-get install -f -y
 
 ---
 
-## 4. Clone FreeSWITCH and prepare packaging
+## ⚙️ Phase 3: Compiling & Packaging FreeSWITCH
+
+### 3.1 Clone FreeSWITCH Source Code
+
 # Clone a specific stable release tag (e.g. v1.11.1) to ensure a stable build
 ```bash
 cd /usr/src
@@ -357,7 +366,7 @@ find . -type f -exec touch {} +
 
 ---
 
-## 5. Build .deb packages
+### 3.2 Build FreeSWITCH .deb Packages
 
 ```bash
 # Exclude conflicting modules in Debian 13: mod_v8, mod_basic, mod_flite, mod_ilbc, mod_silk, mod_managed
@@ -411,9 +420,130 @@ mv /usr/src/freeswitch/libesl*.deb /usr/src/freeswitch/deb/ 2>/dev/null || true
 mv /usr/src/freeswitch/python-esl*.deb /usr/src/freeswitch/deb/ 2>/dev/null || true
 ```
 
-This generates all .deb packages and moves them to `/usr/src/freeswitch/deb/`. Here is the complete list:
+This generates all .deb packages and moves them to `/usr/src/freeswitch/deb/`. For the complete catalog of generated packages, see the [Complete Package Output Reference](#64-complete-package-output-reference) in Phase 6.
 
-### 📦 Complete Package List (191 packages)
+---
+
+## 🚀 Phase 4: Local Installation & Systemd Setup
+
+To install FreeSWITCH on a server directly from the compiled `.deb` packages without using a public repository server, follow these steps:
+
+### 4.1 Install Custom Built Dependencies
+
+Install the custom-built dependency packages first:
+
+```bash
+cd /usr/src/freeswitch/deb
+
+# Install dependency packages (spandsp, libks2, sofia-sip, broadvoice, signalwire-c)
+apt-get install -y \
+  ./libspandsp3_*.deb \
+  ./libspandsp3-dev_*.deb \
+  ./libks2_*.deb \
+  ./libks2-dev_*.deb \
+  ./libsofia-sip-ua0_*.deb \
+  ./libsofia-sip-ua-dev_*.deb \
+  ./sofia-sip-bin_*.deb \
+  ./libbroadvoice1_*.deb \
+  ./libbroadvoice-dev_*.deb \
+  ./signalwire-client-c2_*.deb \
+  ./signalwire-client-c2-dev_*.deb
+
+# Fix any missing system dependencies
+apt-get install -f -y
+```
+
+### 4.2 Install FreeSWITCH Packages
+
+Install the main FreeSWITCH package along with all generated module packages:
+
+```bash
+# Install core and all compiled packages
+apt-get install -y ./*.deb
+
+# Fix any missing dependencies from Debian repositories
+apt-get install -f -y
+```
+
+### 4.3 Verify the Local Installation
+
+Check that FreeSWITCH compiles and runs correctly:
+
+```bash
+# Check version information
+freeswitch -version
+fs_cli -V
+```
+
+### 4.4 Enable and Configure Systemd Service
+
+Adjust the FreeSWITCH systemd service configuration to ensure it starts automatically:
+
+```bash
+# Start FreeSWITCH in the background to initialize
+sudo -u freeswitch /usr/bin/freeswitch -ncwait -nonat -c
+
+# Reload systemd and start the service
+systemctl daemon-reload
+systemctl enable freeswitch
+systemctl start freeswitch
+```
+
+---
+
+## 🌐 Phase 5: Central Distribution (Optional)
+
+If you want to distribute these compiled `.deb` packages to multiple target servers via a secure, central APT repository server using Nginx, Let's Encrypt SSL, and custom index builders, see the dedicated [Debian APT Repository Setup Guide](file:///Users/rodrigocuadra/Documents/Ring2All/docs/distribution/apt_repository_guide.md).
+
+---
+
+## 📚 Phase 6: Reference & Troubleshooting
+
+### 6.1 Troubleshooting & Known Compilation Workarounds
+
+When building FreeSWITCH on virtualized hosts (e.g., Proxmox, VirtualBox, or Docker) or modern Debian 13 environments, you might encounter infinite recursion loops during `make` or `make clean`, which can exhaust system PIDs and collapse the VM. Here is why they happen and how they are resolved:
+
+#### 1. GNU Make Infinite Recursion Loops (Clock Skew)
+*   **The Issue:** Autotools-based systems compare file timestamps to determine if Makefiles or scripts (like `configure` and `config.status`) need to be rebuilt. On VMs or containers where NTP clock updates occur after files are created, or on mounted filesystems, a source template (like `Makefile.am` or `configure.ac`) can get a timestamp in the "future" relative to the system's clock. This causes GNU Make to repeatedly try to regenerate the Makefile, restart itself, and repeat the check, creating an infinite recursion loop (`make[484]`, `make[485]`, etc.).
+*   **The Fix:** 
+    1. Align all timestamps to the current system time using `find . -type f -exec touch {} +` before starting configuration or clean runs.
+    2. Run `./configure` with the `--disable-maintainer-mode` and `--disable-dependency-tracking` flags. This disables the automatic autotools check and regeneration rules entirely, letting `make` compile directly.
+
+#### 2. Parallel Build Race Conditions (`modules.inc`)
+*   **The Issue:** FreeSWITCH dynamically generates `src/mod/modules.inc` from `modules.conf` during the build process. Since `modules.inc` is included in the Makefiles, updating it mid-compile under high concurrency (e.g., `make -j8`) causes GNU Make to stop, reload all Makefiles, and restart. Under parallel builds, this triggers an infinite restart/compilation loop in `src/mod`.
+*   **The Fix:** Force sequential compilation when building Debian packages by defining `DEB_BUILD_OPTIONS="parallel=1"` before executing `dpkg-buildpackage`. This is the same workaround used in the official SignalWire release Dockerfiles.
+
+#### 3. Infinite Loop on `make clean` (Debian Package Clean Phase)
+*   **The Issue:** Running `fakeroot debian/rules clean` or `make clean` triggers GNU Make to inspect Makefile dependencies. If any dependency is considered out of date, it triggers the regeneration loop before the cleaning process can even run.
+*   **The Fix:** Since we compile in a freshly cloned directory, running `make clean` is redundant. We bypass it by overriding `dh_auto_clean` as a no-op inside `debian/rules` during Section 5:
+    ```bash
+    echo "override_dh_auto_clean:" >> rules
+    printf "\t:\n" >> rules
+    ```
+
+---
+
+### 6.2 Workflow Summary
+
+1. Prepare the environment and install build dependencies.
+2. Compile and package **external dependencies** (`spandsp`, `libks2`, `sofia-sip`, `libbroadvoice`, `signalwire-c`) as `.deb`.
+3. Configure, compile, and package **FreeSWITCH + modules** as `.deb` using sequential compilation workaround.
+4. Install packages locally using `apt-get install ./*.deb`.
+5. Test using: `fs_cli -x "status"` and `fs_cli -x "show codecs"`.
+
+---
+
+### 6.3 Expected Result
+- ✔ FreeSWITCH runs smoothly on Debian 13.
+- ✔ Custom-built `.deb` packages successfully compile and install.
+- ✔ Modern codecs like Opus, G.729, CODEC2 are available.
+- ✔ Service runs automatically with correct permissions.
+
+---
+
+### 6.4 Complete Package Output Reference
+
+The compiling and packaging process generates the following 191 packages:
 
 #### Dependencies (12 packages)
 
@@ -667,118 +797,3 @@ This generates all .deb packages and moves them to `/usr/src/freeswitch/deb/`. H
 | `freeswitch-timezones` | Timezone data |
 
 > ✅ = Essential for Ring2All/Softswitch platform
-
----
-
-## 6. Installing the Generated Packages Locally
-
-To install FreeSWITCH on a server directly from the compiled `.deb` packages without using a public repository server, follow these steps:
-
-### 6.1 Install Custom Built Dependencies
-
-Install the custom-built dependency packages first:
-
-```bash
-cd /usr/src/freeswitch/deb
-
-# Install dependency packages (spandsp, libks2, sofia-sip, broadvoice, signalwire-c)
-apt-get install -y \
-  ./libspandsp3_*.deb \
-  ./libspandsp3-dev_*.deb \
-  ./libks2_*.deb \
-  ./libks2-dev_*.deb \
-  ./libsofia-sip-ua0_*.deb \
-  ./libsofia-sip-ua-dev_*.deb \
-  ./sofia-sip-bin_*.deb \
-  ./libbroadvoice1_*.deb \
-  ./libbroadvoice-dev_*.deb \
-  ./signalwire-client-c2_*.deb \
-  ./signalwire-client-c2-dev_*.deb
-
-# Fix any missing system dependencies
-apt-get install -f -y
-```
-
-### 6.2 Install FreeSWITCH Packages
-
-Install the main FreeSWITCH package along with all generated module packages:
-
-```bash
-# Install core and all compiled packages
-apt-get install -y ./*.deb
-
-# Fix any missing dependencies from Debian repositories
-apt-get install -f -y
-```
-
-### 6.3 Verify the Local Installation
-
-Check that FreeSWITCH compiles and runs correctly:
-
-```bash
-# Check version information
-freeswitch -version
-fs_cli -V
-```
-
-### 6.4 Enable and Configure Systemd Service
-
-Adjust the FreeSWITCH systemd service configuration to ensure it starts automatically:
-
-```bash
-# Start FreeSWITCH in the background to initialize
-sudo -u freeswitch /usr/bin/freeswitch -ncwait -nonat -c
-
-# Reload systemd and start the service
-systemctl daemon-reload
-systemctl enable freeswitch
-systemctl start freeswitch
-```
-
----
-
-## 7. Distribute Packages via Central APT Repository
-
-If you want to distribute these compiled `.deb` packages to multiple target servers via a secure, central APT repository server using Nginx, Let's Encrypt SSL, and custom index builders, see the dedicated [Debian APT Repository Setup Guide](file:///Users/rodrigocuadra/Documents/Ring2All/docs/distribution/apt_repository_guide.md).
-
----
-
-## 🛠️ Troubleshooting & Known Compilation Workarounds
-
-When building FreeSWITCH on virtualized hosts (e.g., Proxmox, VirtualBox, or Docker) or modern Debian 13 environments, you might encounter infinite recursion loops during `make` or `make clean`, which can exhaust system PIDs and collapse the VM. Here is why they happen and how they are resolved:
-
-### 1. GNU Make Infinite Recursion Loops (Clock Skew)
-*   **The Issue:** Autotools-based systems compare file timestamps to determine if Makefiles or scripts (like `configure` and `config.status`) need to be rebuilt. On VMs or containers where NTP clock updates occur after files are created, or on mounted filesystems, a source template (like `Makefile.am` or `configure.ac`) can get a timestamp in the "future" relative to the system's clock. This causes GNU Make to repeatedly try to regenerate the Makefile, restart itself, and repeat the check, creating an infinite recursion loop (`make[484]`, `make[485]`, etc.).
-*   **The Fix:** 
-    1. Align all timestamps to the current system time using `find . -type f -exec touch {} +` before starting configuration or clean runs.
-    2. Run `./configure` with the `--disable-maintainer-mode` and `--disable-dependency-tracking` flags. This disables the automatic autotools check and regeneration rules entirely, letting `make` compile directly.
-
-### 2. Parallel Build Race Conditions (`modules.inc`)
-*   **The Issue:** FreeSWITCH dynamically generates `src/mod/modules.inc` from `modules.conf` during the build process. Since `modules.inc` is included in the Makefiles, updating it mid-compile under high concurrency (e.g., `make -j8`) causes GNU Make to stop, reload all Makefiles, and restart. Under parallel builds, this triggers an infinite restart/compilation loop in `src/mod`.
-*   **The Fix:** Force sequential compilation when building Debian packages by defining `DEB_BUILD_OPTIONS="parallel=1"` before executing `dpkg-buildpackage`. This is the same workaround used in the official SignalWire release Dockerfiles.
-
-### 3. Infinite Loop on `make clean` (Debian Package Clean Phase)
-*   **The Issue:** Running `fakeroot debian/rules clean` or `make clean` triggers GNU Make to inspect Makefile dependencies. If any dependency is considered out of date, it triggers the regeneration loop before the cleaning process can even run.
-*   **The Fix:** Since we compile in a freshly cloned directory, running `make clean` is redundant. We bypass it by overriding `dh_auto_clean` as a no-op inside `debian/rules` during Section 5:
-    ```bash
-    echo "override_dh_auto_clean:" >> rules
-    printf "\t:\n" >> rules
-    ```
-
----
-
-## 🔄 Workflow Summary
-
-1. Prepare the environment and install build dependencies.
-2. Compile and package **external dependencies** (`spandsp`, `libks2`, `sofia-sip`, `libbroadvoice`, `signalwire-c`) as `.deb`.
-3. Configure, compile, and package **FreeSWITCH + modules** as `.deb` using sequential compilation workaround.
-4. Install packages locally using `apt-get install ./*.deb`.
-5. Test using: `fs_cli -x "status"` and `fs_cli -x "show codecs"`.
-
----
-
-🎯 **Expected Result**
-- ✔ FreeSWITCH runs smoothly on Debian 13.
-- ✔ Custom-built `.deb` packages successfully compile and install.
-- ✔ Modern codecs like Opus, G.729, CODEC2 are available.
-- ✔ Service runs automatically with correct permissions.
