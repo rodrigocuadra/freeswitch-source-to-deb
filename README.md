@@ -1,3 +1,5 @@
+# 📦 Step-by-Step Guide: Compiling FreeSWITCH on Debian 13 (with .deb packages)
+
 This document summarizes the corrected workflow we followed to build FreeSWITCH on Debian 13 (trixie/sid) and generate .deb packages, taking into account the issues encountered (missing dependencies, spandsp, sofia-sip, etc.).
 
 > [!IMPORTANT]
@@ -426,16 +428,28 @@ find . -type f -exec touch {} +
 
 ### 3.2 Build FreeSWITCH .deb Packages
 
+**Step 1: Exclude Incompatible Modules & Bootstrap Packaging**
+
+Bootstrap the Debian packaging structure for Trixie and exclude modules that are incompatible with Debian 13 (such as JavaScript/V8, Flite, and Silk):
+
 ```bash
-# Exclude conflicting modules in Debian 13: mod_v8, mod_basic, mod_flite, mod_ilbc, mod_silk, mod_managed
 cd /usr/src/freeswitch/src/debian
+
+# Add incompatible modules to the bootstrap exclude list
 sed -i '/xml_int\/mod_xml_ldap/a\  languages/mod_v8\n  languages/mod_basic\n  asr_tts/mod_flite\n  codecs/mod_ilbc\n  codecs/mod_silk\n  languages/mod_managed' bootstrap.sh
 
-# Generate debian/ structure for Debian 13 (trixie)
-cd /usr/src/freeswitch/src/debian
+# Generate the debian/ structure for Debian 13 (trixie)
 ./bootstrap.sh -c trixie
+```
 
-# Disable dh_auto_clean in debian/rules to prevent the infinite clean recursive make loop
+**Step 2: Apply Debian Configuration Workarounds**
+
+Edit the generated `rules` and `control` files to bypass recursion loops and clean up dependencies that are incompatible with Debian 13:
+
+```bash
+cd /usr/src/freeswitch/src/debian
+
+# Disable dh_auto_clean in rules to bypass the infinite clean recursive make loop
 echo "" >> rules
 echo "override_dh_auto_clean:" >> rules
 printf "\t:\n" >> rules
@@ -445,8 +459,13 @@ sed -i '/freeswitch-meta-codecs (= ${binary:Version}),/d' control
 sed -i '/freeswitch-music,/d' control
 sed -i '/freeswitch-sounds,/d' control
 sed -i '/freeswitch-mod-flite (= ${binary:Version}),/d' control
+```
 
-# Update the FreeSWITCH version in changelog
+**Step 3: Update changelog Version**
+
+Create/update the changelog metadata to reflect FreeSWITCH `1.11.1`:
+
+```bash
 cat > changelog <<'EOF'
 freeswitch (1.11.1-1) unstable; urgency=medium
 
@@ -457,20 +476,32 @@ freeswitch (1.11.1-1) unstable; urgency=medium
 
  -- Rodrigo Cuadra <rcuadra@aplitel.com>  Tue, 10 Sep 2025 20:30:00 +0000
 EOF
+```
 
+**Step 4: Build Debian Packages**
+
+Sync file modification timestamps to prevent Autotools clock-skew loops, clean, and compile the packages. We force sequential compilation using `DEB_BUILD_OPTIONS="parallel=1"` to prevent write race conditions:
+
+```bash
 cd /usr/src/freeswitch/src
 
 # Synchronize timestamps to prevent infinite make loops during dpkg-buildpackage
 find . -type f -exec touch {} +
 
+# Clean and remove unnecessary debug packaging targets
 fakeroot debian/rules clean
 rm -rf debian/python-esl-dbg
 rm -rf debian/libfreeswitch1-dbg
 
-# Disable parallel build options to avoid race conditions and recursive make loops in src/mod
+# Build the packages sequentially to bypass modules.inc write race conditions
 DEB_BUILD_OPTIONS="parallel=1" dpkg-buildpackage -us -uc -b -d
+```
 
-# Move packages to /usr/src/freeswitch/deb
+**Step 5: Isolate Generated Packages**
+
+Move all generated packages into `/usr/src/freeswitch/deb/`:
+
+```bash
 mkdir -p /usr/src/freeswitch/deb
 mv /usr/src/freeswitch/*.deb /usr/src/freeswitch/deb/ 2>/dev/null || true
 mv /usr/src/freeswitch/libfreeswitch*.deb /usr/src/freeswitch/deb/ 2>/dev/null || true
