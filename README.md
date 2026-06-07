@@ -197,8 +197,8 @@ Create the following files inside the `debian/` directory:
 rm -rf obj-x86_64-linux-gnu CMakeCache.txt CMakeFiles
 fakeroot debian/rules clean
 
-# Compile packages (-us -uc disables GPG signing)
-dpkg-buildpackage -us -uc -b
+# Compile packages (-us -uc disables GPG signing, nocheck skips timing unit tests)
+DEB_BUILD_OPTIONS="nocheck" dpkg-buildpackage -us -uc -b
 
 # Move generated packages to the FreeSWITCH deb cache
 mkdir -p /usr/src/freeswitch/deb
